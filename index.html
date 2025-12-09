@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple SaaS Accountant</title>
+<style>
+  body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f4f4f9; }
+  header { background:#4CAF50; color:white; padding:1rem; text-align:center; }
+  nav { display:flex; justify-content:space-around; background:#333; color:white; padding:.5rem; }
+  nav button { background:#555; color:white; border:none; padding:.5rem 1rem; cursor:pointer; }
+  nav button.active { background:#4CAF50; }
+  section { padding:1rem; display:none; }
+  table { width:100%; border-collapse: collapse; margin-top:1rem;}
+  th, td { border:1px solid #ddd; padding:8px; text-align:left;}
+  th { background:#4CAF50; color:white; }
+  input, select { padding:.5rem; margin:.2rem 0; width:100%; }
+  .flex { display:flex; gap:1rem; }
+  .chart-container { width:100%; max-width:600px; margin:auto; }
+  button.save-btn { margin-top:.5rem; background:#4CAF50; color:white; border:none; padding:.5rem 1rem; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Simple SaaS Accountant</h1>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+  <button class="tab-btn" data-tab="inventory">Inventory</button>
+  <button class="tab-btn" data-tab="invoice">Invoice</button>
+  <button class="tab-btn" data-tab="income-expense">Income & Expense</button>
+  <button class="tab-btn" data-tab="customer">Customer Orders</button>
+</nav>
+
+<section id="dashboard" style="display:block;">
+  <h2>Dashboard</h2>
+  <div class="chart-container">
+    <canvas id="incomeExpenseChart"></canvas>
+  </div>
+</section>
+
+<section id="inventory">
+  <h2>Inventory</h2>
+  <div>
+    <input type="text" id="productName" placeholder="Product Name">
+    <input type="number" id="productPrice" placeholder="Price">
+    <input type="number" id="productQty" placeholder="Quantity">
+    <button class="save-btn" onclick="addProduct()">Add Product</button>
+  </div>
+  <table id="inventoryTable">
+    <thead>
+      <tr><th>Name</th><th>Price</th><th>Qty</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <button class="save-btn" onclick="exportInventory()">Export to Excel</button>
+</section>
+
+<section id="invoice">
+  <h2>Invoice</h2>
+  <input type="text" id="invoiceCustomer" placeholder="Customer Name">
+  <div id="invoiceItemsContainer"></div>
+  <button class="save-btn" onclick="addInvoiceItem()">Add Item</button>
+  <button class="save-btn" onclick="generateInvoice()">Generate Invoice</button>
+  <div id="invoicePreview"></div>
+</section>
+
+<section id="income-expense">
+  <h2>Income & Expense</h2>
+  <div class="flex">
+    <div>
+      <h3>Add Income</h3>
+      <input type="text" id="incomeDesc" placeholder="Description">
+      <input type="number" id="incomeAmount" placeholder="Amount">
+      <button class="save-btn" onclick="addIncome()">Add Income</button>
+    </div>
+    <div>
+      <h3>Add Expense</h3>
+      <input type="text" id="expenseDesc" placeholder="Description">
+      <input type="number" id="expenseAmount" placeholder="Amount">
+      <button class="save-btn" onclick="addExpense()">Add Expense</button>
+    </div>
+  </div>
+  <table id="incomeTable">
+    <thead><tr><th>Description</th><th>Amount</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <table id="expenseTable">
+    <thead><tr><th>Description</th><th>Amount</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button class="save-btn" onclick="exportIncomeExpense()">Export to Excel</button>
+</section>
+
+<section id="customer">
+  <h2>Customer Orders</h2>
+  <input type="text" id="customerName" placeholder="Customer Name">
+  <select id="customerProduct"></select>
+  <input type="number" id="customerQty" placeholder="Quantity">
+  <button class="save-btn" onclick="addCustomerOrder()">Add Order</button>
+  <table id="customerOrdersTable">
+    <thead><tr><th>Customer</th><th>Product</th><th>Qty</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button class="save-btn" onclick="exportCustomerOrders()">Export to Excel</button>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script>
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('section').forEach(sec=>sec.style.display='none');
+    document.getElementById(btn.dataset.tab).style.display='block';
+    if(btn.dataset.tab==='dashboard') updateChart();
+    if(btn.dataset.tab==='customer') populateCustomerProducts();
+  });
+});
+
+// Data
+let inventory = [];
+let incomeData = [];
+let expenseData = [];
+let customerOrders = [];
+let invoiceItems = [];
+
+// Inventory
+function addProduct(){
+  const name = document.getElementById('productName').value;
+  const price = parseFloat(document.getElementById('productPrice').value);
+  const qty = parseFloat(document.getElementById('productQty').value);
+  if(!name || !price || !qty) return alert('Fill all fields');
+  inventory.push({name, price, qty});
+  updateInventoryTable();
+  clearInputs(['productName','productPrice','productQty']);
+}
+
+function updateInventoryTable(){
+  const tbody = document.querySelector('#inventoryTable tbody');
+  tbody.innerHTML = '';
+  inventory.forEach(p=>{
+    const row = tbody.insertRow();
+    row.insertCell(0).innerText=p.name;
+    row.insertCell(1).innerText=p.price;
+    row.insertCell(2).innerText=p.qty;
+  });
+}
+
+function exportInventory(){
+  const ws = XLSX.utils.json_to_sheet(inventory);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
+  XLSX.writeFile(wb, 'inventory.xlsx');
+}
+
+// Invoice
+function addInvoiceItem(){
+  const container = document.getElementById('invoiceItemsContainer');
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <select class="invoiceProduct"></select>
+    <input type="number" class="invoiceQty" placeholder="Qty">
+  `;
+  container.appendChild(div);
+  populateInvoiceProducts();
+}
+
+function populateInvoiceProducts(){
+  document.querySelectorAll('.invoiceProduct').forEach(sel=>{
+    sel.innerHTML='';
+    inventory.forEach(p=>{
+      const option=document.createElement('option');
+      option.value=p.name;
+      option.text=p.name;
+      sel.appendChild(option);
+    });
+  });
+}
+
+function generateInvoice(){
+  invoiceItems=[];
+  document.querySelectorAll('#invoiceItemsContainer div').forEach(div=>{
+    const product=div.querySelector('.invoiceProduct').value;
+    const qty=parseFloat(div.querySelector('.invoiceQty').value);
+    const item = inventory.find(p=>p.name===product);
+    if(item) invoiceItems.push({product, qty, price:item.price, total:qty*item.price});
+  });
+  const customer = document.getElementById('invoiceCustomer').value;
+  let html=`<h3>Invoice for ${customer}</h3>`;
+  html+=`<table border="1" style="border-collapse:collapse;width:100%"><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr>`;
+  let total=0;
+  invoiceItems.forEach(i=>{
+    total+=i.total;
+    html+=`<tr><td>${i.product}</td><td>${i.qty}</td><td>${i.price}</td><td>${i.total}</td></tr>`;
+  });
+  html+=`<tr><td colspan="3"><strong>Total</strong></td><td>${total}</td></tr></table>`;
+  html+=`<button class="save-btn" onclick="exportInvoice()">Export Invoice</button>`;
+  document.getElementById('invoicePreview').innerHTML=html;
+}
+
+function exportInvoice(){
+  const ws = XLSX.utils.json_to_sheet(invoiceItems);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Invoice');
+  XLSX.writeFile(wb, 'invoice.xlsx');
+}
+
+// Income & Expense
+function addIncome(){
+  const desc = document.getElementById('incomeDesc').value;
+  const amt = parseFloat(document.getElementById('incomeAmount').value);
+  if(!desc || !amt) return alert('Fill fields');
+  incomeData.push({desc, amt});
+  updateIncomeTable();
+  clearInputs(['incomeDesc','incomeAmount']);
+  updateChart();
+}
+
+function addExpense(){
+  const desc = document.getElementById('expenseDesc').value;
+  const amt = parseFloat(document.getElementById('expenseAmount').value);
+  if(!desc || !amt) return alert('Fill fields');
+  expenseData.push({desc, amt});
+  updateExpenseTable();
+  clearInputs(['expenseDesc','expenseAmount']);
+  updateChart();
+}
+
+function updateIncomeTable(){
+  const tbody=document.querySelector('#incomeTable tbody');
+  tbody.innerHTML='';
+  incomeData.forEach(i=>{
+    const row=tbody.insertRow();
+    row.insertCell(0).innerText=i.desc;
+    row.insertCell(1).innerText=i.amt;
+  });
+}
+
+function updateExpenseTable(){
+  const tbody=document.querySelector('#expenseTable tbody');
+  tbody.innerHTML='';
+  expenseData.forEach(e=>{
+    const row=tbody.insertRow();
+    row.insertCell(0).innerText=e.desc;
+    row.insertCell(1).innerText=e.amt;
+  });
+}
+
+function exportIncomeExpense(){
+  const wsIncome = XLSX.utils.json_to_sheet(incomeData);
+  const wsExpense = XLSX.utils.json_to_sheet(expenseData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsIncome, 'Income');
+  XLSX.utils.book_append_sheet(wb, wsExpense, 'Expense');
+  XLSX.writeFile(wb, 'income_expense.xlsx');
+}
+
+// Customer Orders
+function populateCustomerProducts(){
+  const sel = document.getElementById('customerProduct');
+  sel.innerHTML='';
+  inventory.forEach(p=>{
+    const option = document.createElement('option');
+    option.value=p.name;
+    option.text=p.name;
+    sel.appendChild(option);
+  });
+}
+
+function addCustomerOrder(){
+  const customer = document.getElementById('customerName').value;
+  const product = document.getElementById('customerProduct').value;
+  const qty = parseFloat(document.getElementById('customerQty').value);
+  if(!customer || !product || !qty) return alert('Fill fields');
+  customerOrders.push({customer, product, qty});
+  updateCustomerOrdersTable();
+  clearInputs(['customerName','customerQty']);
+}
+
+function updateCustomerOrdersTable(){
+  const tbody = document.querySelector('#customerOrdersTable tbody');
+  tbody.innerHTML='';
+  customerOrders.forEach(o=>{
+    const row=tbody.insertRow();
+    row.insertCell(0).innerText=o.customer;
+    row.insertCell(1).innerText=o.product;
+    row.insertCell(2).innerText=o.qty;
+  });
+}
+
+function exportCustomerOrders(){
+  const ws = XLSX.utils.json_to_sheet(customerOrders);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'CustomerOrders');
+  XLSX.writeFile(wb, 'customer_orders.xlsx');
+}
+
+// Utility
+function clearInputs(ids){ ids.forEach(id=>document.getElementById(id).value=''); }
+
+// Chart
+let chart;
+function updateChart(){
+  const ctx = document.getElementById('incomeExpenseChart').getContext('2d');
+  const income = incomeData.reduce((sum,i)=>sum+i.amt,0);
+  const expense = expenseData.reduce((sum,e)=>sum+e.amt,0);
+  if(chart) chart.destroy();
+  chart = new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:['Income','Expense'],
+      datasets:[{label:'Amount', data:[income,expense], backgroundColor:['#4CAF50','#F44336'] }]
+    },
+    options:{responsive:true}
+  });
+}
+</script>
+
+</body>
+</html>
