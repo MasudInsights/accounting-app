@@ -58,3 +58,13 @@ This application provides essential tools such as inventory tracking, invoice ge
 
 ## 📁 Project Structure
 
+
+---
+
+If you want, I can also:
+✅ Design a professional **GitHub cover image**  
+✅ Improve the UI with Tailwind / Bootstrap  
+✅ Convert the entire app to **React** or **Next.js**  
+Just tell me!
+
+
